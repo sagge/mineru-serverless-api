@@ -7,10 +7,9 @@ from base64 import b64encode
 from glob import glob
 from io import BytesIO, StringIO
 import tempfile
-from typing import Tuple, Union
+from typing import Tuple, Union, Protocol, IO
+import types
 
-import uvicorn
-from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from loguru import logger
 
@@ -28,6 +27,10 @@ from magic_pdf.operators.pipes import PipeResult
 model_config.__use_inside_model__ = True
 
 # app = FastAPI()
+
+class FileObject(Protocol):
+    file: IO[bytes]
+    filename: str
 
 pdf_extensions = [".pdf"]
 office_extensions = [".ppt", ".pptx", ".doc", ".docx"]
@@ -55,7 +58,7 @@ class MemoryDataWriter(DataWriter):
 
 def init_writers(
     file_path: str = None,
-    file: UploadFile = None,
+    file = None,
     output_path: str = None,
     output_image_path: str = None,
 ) -> Tuple[
@@ -179,7 +182,7 @@ def encode_image(image_path: str) -> str:
 # )
 
 def file_parse(
-    file: UploadFile = None,
+    file = None,
     file_path: str = None,
     parse_method: str = "auto",
     is_json_md_dump: bool = False,
@@ -316,9 +319,14 @@ def handler(event):
         filename = url.split("/")[-1]
         if "?" in filename:
             filename = filename.split("?")[0]
-        file = UploadFile(filename=filename, file=BytesIO(response.content))
+        # file = UploadFile(filename=filename, file=BytesIO(response.content))
+        # Create an object with the same interface as UploadFile
+        pdf_file = types.SimpleNamespace(
+            filename=filename,
+            file=BytesIO(response.content)
+        )
 
-        return file_parse(file=file, return_info=True)
+        return file_parse(file=pdf_file, return_info=True)
 
     except Exception as e:
         return {"error": str(e)}
